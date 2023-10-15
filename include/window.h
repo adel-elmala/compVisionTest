@@ -39,7 +39,8 @@ public:
     void original();
     void updateTexture();
     void greyScale();
-
+    void binary();
+    void applyFilter(float* filter,  int filter_size);
 
 
 

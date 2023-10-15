@@ -1,8 +1,9 @@
 #include "window.h"
 
 #include <SDL2/SDL_image.h>
+#include <algorithm>    // std::min
 
-window::window() :m_win_title{ "ComVisonTest" },m_surface{NULL},m_texture{NULL},io{NULL},img_path{ "C:/Users/a.refaat/projects/comvisiontest/lena.png" }
+window::window() :m_win_title{ "ComVisonTest" }, m_surface{ NULL }, m_texture{ NULL }, io{ NULL }, img_path{ "C:/Users/a.refaat/projects/comvisiontest/lena.png" }
 {
 }
 
@@ -12,7 +13,7 @@ window::~window()
 	ImGui_ImplSDLRenderer2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
-	if(m_texture)
+	if (m_texture)
 		SDL_DestroyTexture(m_texture);
 	SDL_DestroyRenderer(m_renderer);
 	SDL_DestroyWindow(m_window);
@@ -70,7 +71,7 @@ void window::render()
 {
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-	
+
 	// Main loop
 	bool done = false;
 	while (!done)
@@ -107,12 +108,32 @@ void window::render()
 				modifyImg();
 
 			}
-			if (ImGui::Button("grey scale"))                           
+			if (ImGui::Button("grey scale"))
 			{
 				greyScale();
 
 			}
+			if (ImGui::Button("binary"))
+			{
+				binary();
 
+			}
+			if (ImGui::Button("gauss"))
+			{
+				float gaussian_kernal_3x3[9] = { 1.0 / 16 , 2.0 / 16,1.0 / 16,
+												2.0 / 16 , 4.0 / 16,2.0 / 16,
+												1.0 / 16 , 2.0 / 16,1.0 / 16 };
+				applyFilter(gaussian_kernal_3x3, 3);
+
+			}
+			if (ImGui::Button("sharpen"))
+			{
+				float sharpen_kernal_3x3[9] = { 0.0 , -1.0 ,0.0,
+												-1.0 , 4.0 ,-1.0,
+												0.0 , -1.0 ,0.0 };
+				applyFilter(sharpen_kernal_3x3, 3);
+
+			}
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io->Framerate, io->Framerate);
 			ImGui::End();
@@ -122,7 +143,7 @@ void window::render()
 		SDL_RenderSetScale(m_renderer, io->DisplayFramebufferScale.x, io->DisplayFramebufferScale.y);
 		SDL_SetRenderDrawColor(m_renderer, (Uint8)(clear_color.x * 255), (Uint8)(clear_color.y * 255), (Uint8)(clear_color.z * 255), (Uint8)(clear_color.w * 255));
 		SDL_RenderClear(m_renderer);
-		
+
 		drawImg();
 
 		ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
@@ -147,7 +168,7 @@ void window::drawImg()
 
 	// put the location where we want the texture to be drawn into a rectangle
 	// I'm also scaling the texture 2x simply by setting the width and height
-	SDL_Rect texr = {0, 0, w ,  h };
+	SDL_Rect texr = { 0, 0, w ,  h };
 	SDL_RenderCopy(m_renderer, m_texture, NULL, &texr);
 
 }
@@ -182,7 +203,7 @@ Uint32 getpixel(SDL_Surface* surface, int x, int y)
 		return 0;       /* shouldn't happen, but avoids warnings */
 	}
 }
-void setpixel(SDL_Surface* surface, int x, int y,Uint32 value)
+void setpixel(SDL_Surface* surface, int x, int y, Uint32 value)
 {
 	int bpp = surface->format->BytesPerPixel;
 	/* Here p is the address to the pixel we want to retrieve */
@@ -195,7 +216,7 @@ void setpixel(SDL_Surface* surface, int x, int y,Uint32 value)
 		break;
 
 	case 2:
-		*(Uint16*)p = (Uint16) value;
+		*(Uint16*)p = (Uint16)value;
 		break;
 
 	case 3:
@@ -207,12 +228,12 @@ void setpixel(SDL_Surface* surface, int x, int y,Uint32 value)
 		}*/
 		/*else*/
 		*(Uint8*)p = value & 0x000000ff;
-		*((Uint8*)p + 1) = (value & 0x0000ff00)>>8;
+		*((Uint8*)p + 1) = (value & 0x0000ff00) >> 8;
 		*((Uint8*)p + 2) = (value & 0x00ff0000) >> 16;
 		break;
 
 	case 4:
-		*(Uint32*)p = (Uint32) value;
+		*(Uint32*)p = (Uint32)value;
 		break;
 
 	default:
@@ -224,19 +245,18 @@ void window::modifyImg()
 {
 	SDL_LockSurface(m_surface);
 	SDL_Color rgb;
-	for (int y = 0;y < m_surface->h;++y)
+	for (int y = 0; y < m_surface->h; ++y)
 	{
 		for (int x = 0; x < m_surface->w; x++)
 		{
 			Uint32 pix = getpixel(m_surface, x, y);
 			SDL_GetRGB(pix, m_surface->format, &rgb.r, &rgb.g, &rgb.b);
 			rgb = { 0,rgb.g,0,255 };
-			pix  = SDL_MapRGB(m_surface->format, rgb.r, rgb.g, rgb.b);
+			pix = SDL_MapRGB(m_surface->format, rgb.r, rgb.g, rgb.b);
 			setpixel(m_surface, x, y, pix);
 		}
 	}
 	SDL_UnlockSurface(m_surface);
-
 }
 
 void window::greyScale()
@@ -256,6 +276,68 @@ void window::greyScale()
 		}
 	}
 	SDL_UnlockSurface(m_surface);
-
 }
 
+void window::binary()
+{
+	SDL_LockSurface(m_surface);
+	SDL_Color rgb;
+	unsigned char threshold = 120;
+	for (int y = 0; y < m_surface->h; ++y)
+	{
+		for (int x = 0; x < m_surface->w; x++)
+		{
+			Uint32 pix = getpixel(m_surface, x, y);
+			SDL_GetRGB(pix, m_surface->format, &rgb.r, &rgb.g, &rgb.b);
+			unsigned char grey_value = rgb.r;
+			unsigned char binary_value = grey_value >= threshold ? 255 : 0;
+			rgb = { binary_value,binary_value,binary_value,255 };
+			pix = SDL_MapRGB(m_surface->format, rgb.r, rgb.g, rgb.b);
+			setpixel(m_surface, x, y, pix);
+		}
+	}
+	SDL_UnlockSurface(m_surface);
+}
+
+
+void window::applyFilter(float* filter, int filter_size)
+{
+	SDL_LockSurface(m_surface);
+	SDL_Color rgb;
+	unsigned char threshold = 120;
+	int shifted_index = filter_size / 2;
+	for (int y = shifted_index; y < m_surface->h - shifted_index; ++y)
+	{
+		for (int x = shifted_index; x < m_surface->w - shifted_index; x++)
+		{
+			SDL_Color accum_rgb = { 0 };
+			// for each pixel in the filter
+			for (int i = -shifted_index, k = 0; i <= shifted_index; i++, ++k)
+			{
+				// for each pixel in the filter
+				for (int j = -shifted_index, l = 0; j <= shifted_index; j++, l++)
+				{
+					// extract the pixel rgb
+					Uint32 pix = getpixel(m_surface, x + i, y + j);
+					SDL_GetRGB(pix, m_surface->format, &rgb.r, &rgb.g, &rgb.b);
+
+					float filter_value = *(filter + (filter_size * k) + l);
+					// process the pixel
+					rgb = { (unsigned char)(rgb.r * filter_value),
+						(unsigned char)(rgb.g * filter_value),
+						(unsigned char)(rgb.b * filter_value) };
+
+					accum_rgb = { (unsigned char)std::min(255, (rgb.r + accum_rgb.r)),
+									(unsigned char)std::min(255, (rgb.g + accum_rgb.g)),
+									(unsigned char)std::min(255, (rgb.b + accum_rgb.b)),
+									255 };
+
+				}
+			}
+			// save the new pixel
+			Uint32 pix = SDL_MapRGB(m_surface->format, accum_rgb.r, accum_rgb.g, accum_rgb.b);
+			setpixel(m_surface, x, y, pix);
+		}
+	}
+	SDL_UnlockSurface(m_surface);
+}
