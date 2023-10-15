@@ -2,7 +2,7 @@
 
 #include <SDL2/SDL_image.h>
 
-window::window() :m_win_title{ "ComVisonTest" },m_surface{NULL},m_texture{NULL},io{NULL}
+window::window() :m_win_title{ "ComVisonTest" },m_surface{NULL},m_texture{NULL},io{NULL},img_path{ "C:/Users/a.refaat/projects/comvisiontest/lena.png" }
 {
 }
 
@@ -11,7 +11,7 @@ window::~window()
 	// Cleanup
 	ImGui_ImplSDLRenderer2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
-	//ImGui::DestroyContext();
+	ImGui::DestroyContext();
 	if(m_texture)
 		SDL_DestroyTexture(m_texture);
 	SDL_DestroyRenderer(m_renderer);
@@ -62,26 +62,19 @@ int window::init()
 	ImGui_ImplSDLRenderer2_Init(m_renderer);
 
 	// read the image 
-	loadImg("C:/Users/a.refaat/projects/comvisiontest/lena.png");
+	loadImg(img_path);
 
 }
 
 void window::render()
 {
 	// Our state
-	bool show_demo_window = true;
-	bool show_another_window = true;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 	
 	// Main loop
 	bool done = false;
 	while (!done)
 	{
-		// Poll and handle events (inputs, window resize, etc.)
-		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-		// - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-		// - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-		// Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
@@ -99,26 +92,27 @@ void window::render()
 		//ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
 
-		//// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-		//if (show_demo_window)
-		//	ImGui::ShowDemoWindow(&show_demo_window);
-
 		// 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
 		{
 			static float f = 0.0f;
-			static int counter = 0;
+			ImGui::Begin("Controls!");                          // Create a window called "Hello, world!" and append into it.
 
-			ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+			if (ImGui::Button("reset"))
+			{
+				loadImg(img_path);
 
-			ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-			if (ImGui::Button("modify image"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+			}
+			if (ImGui::Button("mod image"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
 			{
 				modifyImg();
-				counter++;
+
 			}
-			ImGui::SameLine();
-			ImGui::Text("counter = %d", counter);
+			if (ImGui::Button("grey scale"))                           
+			{
+				greyScale();
+
+			}
+
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io->Framerate, io->Framerate);
 			ImGui::End();
@@ -128,7 +122,9 @@ void window::render()
 		SDL_RenderSetScale(m_renderer, io->DisplayFramebufferScale.x, io->DisplayFramebufferScale.y);
 		SDL_SetRenderDrawColor(m_renderer, (Uint8)(clear_color.x * 255), (Uint8)(clear_color.y * 255), (Uint8)(clear_color.z * 255), (Uint8)(clear_color.w * 255));
 		SDL_RenderClear(m_renderer);
+		
 		drawImg();
+
 		ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
 		SDL_RenderPresent(m_renderer);
 	}
@@ -140,8 +136,7 @@ void window::loadImg(char* img_path)
 {
 	m_surface = IMG_Load(img_path);
 }
-/* This is meant to show how to edit a surface's pixels on the CPU, but
-   normally you should use SDL_FillRect() to wipe a surface's contents. */
+
 void window::drawImg()
 {
 	int w, h; // texture width & height
@@ -229,9 +224,9 @@ void window::modifyImg()
 {
 	SDL_LockSurface(m_surface);
 	SDL_Color rgb;
-	for (int x = 0;x <= m_surface->w;++x)
+	for (int y = 0;y < m_surface->h;++y)
 	{
-		for (int y = 0; y <= m_surface->h; y++)
+		for (int x = 0; x < m_surface->w; x++)
 		{
 			Uint32 pix = getpixel(m_surface, x, y);
 			SDL_GetRGB(pix, m_surface->format, &rgb.r, &rgb.g, &rgb.b);
@@ -243,3 +238,24 @@ void window::modifyImg()
 	SDL_UnlockSurface(m_surface);
 
 }
+
+void window::greyScale()
+{
+	SDL_LockSurface(m_surface);
+	SDL_Color rgb;
+	for (int y = 0; y < m_surface->h; ++y)
+	{
+		for (int x = 0; x < m_surface->w; x++)
+		{
+			Uint32 pix = getpixel(m_surface, x, y);
+			SDL_GetRGB(pix, m_surface->format, &rgb.r, &rgb.g, &rgb.b);
+			unsigned char grey_value = rgb.r * 0.3 + rgb.g * 0.6 + rgb.b * 0.1;
+			rgb = { grey_value,grey_value,grey_value,255 };
+			pix = SDL_MapRGB(m_surface->format, rgb.r, rgb.g, rgb.b);
+			setpixel(m_surface, x, y, pix);
+		}
+	}
+	SDL_UnlockSurface(m_surface);
+
+}
+

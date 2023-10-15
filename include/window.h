@@ -16,11 +16,13 @@ private:
     /* data */
     SDL_Window* m_window;
     SDL_Renderer* m_renderer;
-    SDL_GLContext gl_context;
+    ImGuiContext * imgui_context;
     SDL_Texture* m_texture;
     SDL_Surface* m_surface;
+    SDL_Surface* m_win_surface;
     ImGuiIO* io;
     char* m_win_title;
+    char* img_path;
     ImVec4 clear_color;
 
 public:
@@ -32,6 +34,12 @@ public:
     void loadImg(char* img_path);
     void drawImg();
     void modifyImg();
+    void grey();
+    void setupGui();
+    void original();
+    void updateTexture();
+    void greyScale();
+
 
 
 
