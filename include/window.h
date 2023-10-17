@@ -41,7 +41,10 @@ public:
     void greyScale();
     void binary();
     void applyFilter(float* filter,  int filter_size);
+    void segment();
 
+private:
+    bool colors_match(SDL_Color c1, SDL_Color c2);
 
 
 };

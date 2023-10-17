@@ -2,8 +2,10 @@
 
 #include <SDL2/SDL_image.h>
 #include <algorithm>    // std::min
+#include <vector>
+#include <set>
 
-window::window() :m_win_title{ "ComVisonTest" }, m_surface{ NULL }, m_texture{ NULL }, io{ NULL }, img_path{ "C:/Users/a.refaat/projects/comvisiontest/lena.png" }
+window::window() :m_win_title{ "ComVisonTest" }, m_surface{ NULL }, m_texture{ NULL }, io{ NULL }, img_path{ "C:/Users/a.refaat/projects/comvisiontest/bin2.png" }
 {
 }
 
@@ -132,6 +134,12 @@ void window::render()
 												-1.0 , 4.0 ,-1.0,
 												0.0 , -1.0 ,0.0 };
 				applyFilter(sharpen_kernal_3x3, 3);
+
+			}
+			if (ImGui::Button("segment"))
+			{
+
+				segment();
 
 			}
 
@@ -304,7 +312,6 @@ void window::applyFilter(float* filter, int filter_size)
 {
 	SDL_LockSurface(m_surface);
 	SDL_Color rgb;
-	unsigned char threshold = 120;
 	int shifted_index = filter_size / 2;
 	for (int y = shifted_index; y < m_surface->h - shifted_index; ++y)
 	{
@@ -340,4 +347,199 @@ void window::applyFilter(float* filter, int filter_size)
 		}
 	}
 	SDL_UnlockSurface(m_surface);
+}
+
+
+// TODO
+// assuming pixel values either 255 or 0 (binary but with 3 chanels)
+void window::segment()
+{
+	SDL_Color pix_rgb;
+	SDL_Color left_rgb;
+	SDL_Color up_rgb;
+	SDL_Color upper_left_rgb;
+
+	int width = m_surface->w;
+	int height = m_surface->h;
+
+	unsigned int* label_buffer = new unsigned int[width * height * sizeof(unsigned int)];
+	std::vector<std::pair<unsigned int, unsigned int >> equivalance_table;
+
+	memset(label_buffer, 0, height * width * sizeof(unsigned int));
+	unsigned int current_label = 0;
+
+	SDL_LockSurface(m_surface);
+	// FIXME : fix the boundries 
+	for (int y = 0; y < height; ++y)
+	{
+		for (int x = 0; x < width; x++)
+		{
+			unsigned int* pix_label = label_buffer + (y * width) + x;
+			if (0 == *pix_label) // unlabeled
+			{
+				Uint32 pix = getpixel(m_surface, x, y);
+				SDL_GetRGB(pix, m_surface->format, &pix_rgb.r, &pix_rgb.g, &pix_rgb.b);
+				//	X X
+				//	X 0
+				if (colors_match(pix_rgb, { 0,0,0,255 })) // not an object pixel
+					continue;
+
+				// if first row 
+				if (0 == y)
+				{
+					if (0 == x) // first ever pixel
+						*pix_label = ++current_label;
+					// look left only 
+					Uint32 left = getpixel(m_surface, x - 1, y); // left , same row
+					SDL_GetRGB(left, m_surface->format, &left_rgb.r, &left_rgb.g, &left_rgb.b);
+					if (colors_match(left_rgb, pix_rgb))
+					{
+						*pix_label = *(label_buffer + (y * width) + (x - 1)); // assign it the same label of the left pixel
+					}
+					else
+					{
+						*pix_label = ++current_label;
+					}
+					continue;
+				}
+				// if first colomn
+				if (0 == x)
+				{
+					// look up only
+					Uint32 up = getpixel(m_surface, x, y - 1); // up 
+					SDL_GetRGB(up, m_surface->format, &up_rgb.r, &up_rgb.g, &up_rgb.b);
+					if (colors_match(up_rgb, pix_rgb))
+					{
+						*pix_label = *(label_buffer + ((y - 1) * width) + (x)); // assign it the same label of the upper pixel
+					}
+					else
+					{
+						*pix_label = ++current_label;
+					}
+				}
+				// get the 3-neighboring pixels
+				Uint32 upper_left = getpixel(m_surface, x - 1, y - 1); // left , upper row
+				Uint32 left = getpixel(m_surface, x - 1, y); // left , same row
+				Uint32 up = getpixel(m_surface, x, y - 1); // up 
+				SDL_GetRGB(upper_left, m_surface->format, &upper_left_rgb.r, &upper_left_rgb.g, &upper_left_rgb.b);
+				SDL_GetRGB(up, m_surface->format, &up_rgb.r, &up_rgb.g, &up_rgb.b);
+				SDL_GetRGB(left, m_surface->format, &left_rgb.r, &left_rgb.g, &left_rgb.b);
+
+				//  3-neighboring pixels are background pixels
+				//	0 0
+				//	0 1
+				if (colors_match(upper_left_rgb, { 0,0,0,255 }) && colors_match(left_rgb, { 0,0,0,255 }) && colors_match(up_rgb, { 0,0,0,255 }))
+				{
+					// assign a new label
+					*pix_label = ++current_label;
+					continue;
+				}
+				//	D X
+				//	X 1
+				if (colors_match(upper_left_rgb, pix_rgb))
+				{
+					*pix_label = *(label_buffer + ((y - 1) * width) + (x - 1)); // assign it the same label of the \diagonal pixel
+					continue;
+				}
+				//	0 0
+				//	C 1 
+				if (colors_match(left_rgb, pix_rgb) && colors_match(upper_left_rgb, { 0,0,0,255 }) && colors_match(up_rgb, { 0,0,0,255 }))
+				{
+					*pix_label = *(label_buffer + (y * width) + (x - 1)); // assign it the same label of the left pixel
+					continue;
+				}
+				//	0 B
+				//	0 1 
+				if (colors_match(up_rgb, pix_rgb) && colors_match(upper_left_rgb, { 0,0,0,255 }) && colors_match(left_rgb, { 0,0,0,255 }))
+				{
+					*pix_label = *(label_buffer + ((y - 1) * width) + (x)); // assign it the same label of the upper pixel
+					continue;
+				}
+				//	0 B
+				//	C 1 
+				if (colors_match(up_rgb, pix_rgb) && colors_match(left_rgb, pix_rgb))
+				{
+					*pix_label = *(label_buffer + ((y - 1) * width) + (x)); // assign it the same label of the upper pixel
+					// add the equvalent label pair into the table
+					equivalance_table.push_back({ *(label_buffer + ((y - 1) * width) + (x)) ,
+													*(label_buffer + ((y)*width) + (x - 1)) });
+					continue;
+				}
+
+			}
+		}
+	}
+	
+	//// resolve the equivalance table 
+
+	for (auto [x,y] : equivalance_table)
+	{
+		if (x == y)
+			continue;
+		for (int r = 0; r < height; ++r)
+		{
+			for (int c = 0; c < width; c++)
+			{
+				unsigned int * target = label_buffer + (r * width) + c;
+				if (*target == x)
+					*target = y;
+			}
+		}
+
+	}
+	// count the unique labels -- count the number of objects in the image
+	std::set<unsigned int> unique_labels;
+	for (int r = 0; r < height; ++r)
+	{
+		for (int c = 0; c < width; c++)
+		{
+			unsigned int* target = label_buffer + (r * width) + c;
+			if (*target)
+				unique_labels.insert(*target);
+		}
+	}
+
+	// build the color table
+	std::vector<SDL_Color> colorTable;
+	//float colorStep = 255.0 / current_label;
+	float colorStep = 15;
+	for (int i = 1; i <= current_label; ++i)
+	{
+		SDL_Color color = { 0 };
+
+		for (int r = 0; r <= 255; r += colorStep)
+		{
+			color.r = r ;
+			for (int g = 0; g <= 255; g += colorStep)
+			{
+				color.g = g;
+
+				for (int b = 0; b <= 255; b += colorStep)
+				{
+					color.b = b;
+					colorTable.push_back(color);
+
+				}
+			}
+		}
+	}
+	// recolor the image based on assigned labels
+	for (int y = 1; y < height; ++y)
+	{
+		for (int x = 0; x < width; x++)
+		{
+			unsigned int label = *(label_buffer + (y * width) + x);
+			if (0 == label)
+				continue;
+			Uint32 pix = SDL_MapRGB(m_surface->format, colorTable[label -1].r, colorTable[label -1 ].g, colorTable[label -1].b);
+
+			setpixel(m_surface, x, y, pix);
+		}
+	}
+	SDL_UnlockSurface(m_surface);
+	delete[] label_buffer;
+}
+bool window::colors_match(SDL_Color c1, SDL_Color c2)
+{
+	return (c1.r == c2.r) && (c1.g == c2.g) && (c1.b == c2.b);
 }
