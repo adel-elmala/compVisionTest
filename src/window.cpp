@@ -78,6 +78,7 @@ void window::render()
 	bool done = false;
 	while (!done)
 	{
+
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
