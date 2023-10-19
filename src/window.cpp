@@ -5,7 +5,7 @@
 #include <vector>
 #include <set>
 
-window::window() :m_win_title{ "ComVisonTest" }, m_surface{ NULL }, m_texture{ NULL }, io{ NULL }, img_path{ "C:/Users/a.refaat/projects/comvisiontest/bin2.png" }
+window::window() :m_win_title{ "ComVisonTest" }, m_surface{ NULL }, m_texture{ NULL }, io{ NULL }, img_path{ "C:/Users/a.refaat/projects/comvisiontest/lena.png" }
 {
 }
 
@@ -123,18 +123,27 @@ void window::render()
 			}
 			if (ImGui::Button("gauss"))
 			{
-				float gaussian_kernal_3x3[9] = { 1.0 / 16 , 2.0 / 16,1.0 / 16,
-												2.0 / 16 , 4.0 / 16,2.0 / 16,
-												1.0 / 16 , 2.0 / 16,1.0 / 16 };
-				applyFilter(gaussian_kernal_3x3, 3);
+				float gaussian_kernal_3x3[9] = { 1.0 , 2.0 ,1.0 ,
+													2.0 , 4.0 ,2.0 ,
+													1.0 , 2.0 ,1.0 };
+				applyFilter(gaussian_kernal_3x3, 3, 16.0);
 
 			}
-			if (ImGui::Button("sharpen"))
+			if (ImGui::Button("impulse"))
 			{
-				float sharpen_kernal_3x3[9] = { 0.0 , -1.0 ,0.0,
-												-1.0 , 4.0 ,-1.0,
-												0.0 , -1.0 ,0.0 };
-				applyFilter(sharpen_kernal_3x3, 3);
+				float gaussian_kernal_3x3[9] = {	0.0 , 0.0 ,1.0 ,
+													0.0 , 0.0 ,0.0 ,
+													0.0 , 0.0 ,0.0 };
+				applyFilter(gaussian_kernal_3x3, 3, 1.0);
+
+			}
+			if (ImGui::Button("Sobel - X Direction"))
+			{
+				float sobel_kernal_3x3[9] = {	-1.0f, 0.0f, 1.0f,
+												-2.0f, 0.0f, 2.0f,
+												-1.0f, 0.0f, 1.0f };
+
+				applyFilter(sobel_kernal_3x3, 3, 3);
 
 			}
 			if (ImGui::Button("segment"))
@@ -308,17 +317,23 @@ void window::binary()
 	SDL_UnlockSurface(m_surface);
 }
 
-
-void window::applyFilter(float* filter, int filter_size)
+void window::applyFilter(float* filter, int filter_size, double divBy)
 {
 	SDL_LockSurface(m_surface);
-	SDL_Color rgb;
+	SDL_Surface *copy_surface = SDL_DuplicateSurface(m_surface);
+	const char* err = SDL_GetError();
+
+	SDL_LockSurface(copy_surface);
+	SDL_Color rgb = { 0 };
 	int shifted_index = filter_size / 2;
-	for (int y = shifted_index; y < m_surface->h - shifted_index; ++y)
+	for (int y = shifted_index; y < (m_surface->h - shifted_index); ++y)
 	{
-		for (int x = shifted_index; x < m_surface->w - shifted_index; x++)
+		for (int x = shifted_index; x < (m_surface->w - shifted_index); ++x)
 		{
-			SDL_Color accum_rgb = { 0 };
+			double accum_r = 0;
+			double accum_g = 0;
+			double accum_b = 0;
+
 			// for each pixel in the filter
 			for (int i = -shifted_index, k = 0; i <= shifted_index; i++, ++k)
 			{
@@ -326,28 +341,29 @@ void window::applyFilter(float* filter, int filter_size)
 				for (int j = -shifted_index, l = 0; j <= shifted_index; j++, l++)
 				{
 					// extract the pixel rgb
-					Uint32 pix = getpixel(m_surface, x + i, y + j);
+					Uint32 pix = getpixel(copy_surface, x + j, y + i);
 					SDL_GetRGB(pix, m_surface->format, &rgb.r, &rgb.g, &rgb.b);
 
 					float filter_value = *(filter + (filter_size * k) + l);
 					// process the pixel
-					rgb = { (unsigned char)(rgb.r * filter_value),
-						(unsigned char)(rgb.g * filter_value),
-						(unsigned char)(rgb.b * filter_value) };
-
-					accum_rgb = { (unsigned char)std::min(255, (rgb.r + accum_rgb.r)),
-									(unsigned char)std::min(255, (rgb.g + accum_rgb.g)),
-									(unsigned char)std::min(255, (rgb.b + accum_rgb.b)),
-									255 };
-
+					accum_r += ((double)rgb.r) * filter_value;
+					accum_g += ((double)rgb.g) * filter_value;
+					accum_b += ((double)rgb.b) * filter_value;
 				}
 			}
+
+			accum_r = std::max(0.0, std::min(255.0, accum_r / divBy));
+			accum_g = std::max(0.0, std::min(255.0, accum_g / divBy));
+			accum_b = std::max(0.0, std::min(255.0, accum_b / divBy));
+
 			// save the new pixel
-			Uint32 pix = SDL_MapRGB(m_surface->format, accum_rgb.r, accum_rgb.g, accum_rgb.b);
+			Uint32 pix = SDL_MapRGB(m_surface->format, accum_r, accum_g, accum_b);
 			setpixel(m_surface, x, y, pix);
 		}
 	}
 	SDL_UnlockSurface(m_surface);
+	SDL_UnlockSurface(copy_surface);
+	SDL_FreeSurface(copy_surface);
 }
 
 
@@ -470,10 +486,10 @@ void window::segment()
 			}
 		}
 	}
-	
+
 	//// resolve the equivalance table 
 
-	for (auto [x,y] : equivalance_table)
+	for (auto [x, y] : equivalance_table)
 	{
 		if (x == y)
 			continue;
@@ -481,7 +497,7 @@ void window::segment()
 		{
 			for (int c = 0; c < width; c++)
 			{
-				unsigned int * target = label_buffer + (r * width) + c;
+				unsigned int* target = label_buffer + (r * width) + c;
 				if (*target == x)
 					*target = y;
 			}
@@ -504,13 +520,13 @@ void window::segment()
 	std::vector<SDL_Color> colorTable;
 	//float colorStep = 255.0 / current_label;
 	float colorStep = 15;
-	for (int i = 1; i <= current_label; ++i)
+	for (unsigned int i = 1; i <= current_label; ++i)
 	{
 		SDL_Color color = { 0 };
 
 		for (int r = 0; r <= 255; r += colorStep)
 		{
-			color.r = r ;
+			color.r = r;
 			for (int g = 0; g <= 255; g += colorStep)
 			{
 				color.g = g;
@@ -532,7 +548,7 @@ void window::segment()
 			unsigned int label = *(label_buffer + (y * width) + x);
 			if (0 == label)
 				continue;
-			Uint32 pix = SDL_MapRGB(m_surface->format, colorTable[label -1].r, colorTable[label -1 ].g, colorTable[label -1].b);
+			Uint32 pix = SDL_MapRGB(m_surface->format, colorTable[label - 1].r, colorTable[label - 1].g, colorTable[label - 1].b);
 
 			setpixel(m_surface, x, y, pix);
 		}

@@ -40,7 +40,7 @@ public:
     void updateTexture();
     void greyScale();
     void binary();
-    void applyFilter(float* filter,  int filter_size);
+    void applyFilter(float* filter,  int filter_size,double divBy);
     void segment();
 
 private:
