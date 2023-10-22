@@ -45,6 +45,8 @@ public:
 
 private:
     bool colors_match(SDL_Color c1, SDL_Color c2);
-
+   
 
 };
+Uint32 getpixel(SDL_Surface* surface, int x, int y);
+void setpixel(SDL_Surface* surface, int x, int y, Uint32 value);

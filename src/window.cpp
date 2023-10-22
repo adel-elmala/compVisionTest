@@ -1,5 +1,4 @@
 #include "window.h"
-
 #include <SDL2/SDL_image.h>
 #include <algorithm>    // std::min
 #include <vector>
@@ -131,19 +130,55 @@ void window::render()
 			}
 			if (ImGui::Button("impulse"))
 			{
-				float gaussian_kernal_3x3[9] = {	0.0 , 0.0 ,1.0 ,
+				float gaussian_kernal_3x3[9] = { 0.0 , 0.0 ,1.0 ,
 													0.0 , 0.0 ,0.0 ,
 													0.0 , 0.0 ,0.0 };
 				applyFilter(gaussian_kernal_3x3, 3, 1.0);
 
 			}
-			if (ImGui::Button("Sobel - X Direction"))
+			if (ImGui::Button("Gradient Magnitude - Sobel"))
 			{
-				float sobel_kernal_3x3[9] = {	-1.0f, 0.0f, 1.0f,
+				SDL_Surface* original_surface = SDL_DuplicateSurface(m_surface);
+
+				float sobel_x_kernal_3x3[9] = { -1.0f, 0.0f, 1.0f,
 												-2.0f, 0.0f, 2.0f,
 												-1.0f, 0.0f, 1.0f };
 
-				applyFilter(sobel_kernal_3x3, 3, 3);
+				applyFilter(sobel_x_kernal_3x3, 3, 3);
+				SDL_Surface* sobel_x_surface = SDL_DuplicateSurface(m_surface);
+				SDL_BlitSurface(original_surface, &(original_surface->clip_rect), m_surface, &(original_surface->clip_rect));
+
+				float sobel_y_kernal_3x3[9] = { 1.0f, 2.0f, 1.0f,
+												0.0f, 0.0f, 0.0f,
+												-1.0f, -2.0f, -1.0f };
+
+				applyFilter(sobel_y_kernal_3x3, 3, 3);
+				SDL_Color rgb_sobelx;
+				SDL_Color rgb_sobely;
+				for (int y = 0; y < (m_surface->h); ++y)
+				{
+					for (int x = 0; x < (m_surface->w); ++x)
+					{
+						Uint32 sobelx = getpixel(sobel_x_surface, x, y);
+						Uint32 sobely = getpixel(m_surface, x, y);
+						SDL_GetRGB(sobelx, m_surface->format, &rgb_sobelx.r, &rgb_sobelx.g, &rgb_sobelx.b);
+						SDL_GetRGB(sobely, m_surface->format, &rgb_sobely.r, &rgb_sobely.g, &rgb_sobely.b);
+
+						double grad_mag_r = sqrt((rgb_sobelx.r * rgb_sobelx.r) + (rgb_sobely.r * rgb_sobely.r));
+						double grad_mag_g = sqrt((rgb_sobelx.g * rgb_sobelx.g) + (rgb_sobely.g * rgb_sobely.g));
+						double grad_mag_b = sqrt((rgb_sobelx.b * rgb_sobelx.b) + (rgb_sobely.b * rgb_sobely.b));
+						double threshold = 120.0;
+						// save the new pixel
+						/*Uint32 pix = SDL_MapRGB(m_surface->format, 
+							grad_mag_r >= threshold ? grad_mag_r : 0,
+							grad_mag_g >= threshold ? grad_mag_g : 0,
+							grad_mag_b >= threshold ? grad_mag_b : 0);*/
+						Uint32 pix = SDL_MapRGB(m_surface->format,grad_mag_r,grad_mag_g,grad_mag_b );
+						setpixel(m_surface, x, y, pix);
+					}
+
+				}
+
 
 			}
 			if (ImGui::Button("segment"))
@@ -169,8 +204,6 @@ void window::render()
 	}
 }
 
-
-
 void window::loadImg(char* img_path)
 {
 	m_surface = IMG_Load(img_path);
@@ -190,6 +223,7 @@ void window::drawImg()
 	SDL_RenderCopy(m_renderer, m_texture, NULL, &texr);
 
 }
+
 Uint32 getpixel(SDL_Surface* surface, int x, int y)
 {
 	int bpp = surface->format->BytesPerPixel;
@@ -221,6 +255,7 @@ Uint32 getpixel(SDL_Surface* surface, int x, int y)
 		return 0;       /* shouldn't happen, but avoids warnings */
 	}
 }
+
 void setpixel(SDL_Surface* surface, int x, int y, Uint32 value)
 {
 	int bpp = surface->format->BytesPerPixel;
@@ -320,7 +355,7 @@ void window::binary()
 void window::applyFilter(float* filter, int filter_size, double divBy)
 {
 	SDL_LockSurface(m_surface);
-	SDL_Surface *copy_surface = SDL_DuplicateSurface(m_surface);
+	SDL_Surface* copy_surface = SDL_DuplicateSurface(m_surface);
 	const char* err = SDL_GetError();
 
 	SDL_LockSurface(copy_surface);
@@ -366,8 +401,6 @@ void window::applyFilter(float* filter, int filter_size, double divBy)
 	SDL_FreeSurface(copy_surface);
 }
 
-
-// TODO
 // assuming pixel values either 255 or 0 (binary but with 3 chanels)
 void window::segment()
 {
@@ -556,6 +589,7 @@ void window::segment()
 	SDL_UnlockSurface(m_surface);
 	delete[] label_buffer;
 }
+
 bool window::colors_match(SDL_Color c1, SDL_Color c2)
 {
 	return (c1.r == c2.r) && (c1.g == c2.g) && (c1.b == c2.b);
